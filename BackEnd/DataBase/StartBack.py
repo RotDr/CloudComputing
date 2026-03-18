@@ -1,7 +1,7 @@
 import sqlite3
 
 #from BasicGui.StartFront import entry
-from DataBaseAndCrudOperations.CrudOperations import *
+from DataBase.CrudOperations import *
 
 con = sqlite3.connect('../BasicGui/decks.db')
 cursor = con.cursor()

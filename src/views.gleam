@@ -1,17 +1,24 @@
 import gleam/int
-import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{Some}
 import lustre/attribute.{class}
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
 import model.{
   type Message, type Model, CardCreation, CardDeleting, CardManager,
-  CardModifying, DeckCreation, DeckDeleting, DeckManager, DeckModifying,
-  ErrorState, Quiz, Start, UserCreatesACard, UserDeletesACard, UserGoesBack,
-  UserModifiesACard, UserOpensCardManagement, UserOpensDeckManagement,
+  CardModifying, ConfirmationPage, DeckCardAddition, DeckCardRemoval,
+  DeckCreation, DeckDeleting, DeckManager, DeckModifying, ErrorState,
+  NewDeckCardChoose, Quiz, Start, UserGoesBack, UserOpensCardManagement,
+  UserOpensDeckManagement,
 }
-import objects.{type Card, type Deck, type DeckCards}
+import views_cards.{
+  view_card_creation, view_card_deleting, view_card_management,
+  view_card_modifying,
+}
+import views_decks.{
+  view_deck_card_removal, view_deck_creation, view_deck_deleting,
+  view_deck_management, view_deck_modifying, view_new_deck_card_choose,
+}
 
 pub fn view(model: Model) -> Element(Message) {
   html.div([class("min-h-screen bg-gray-50")], [
@@ -19,20 +26,22 @@ pub fn view(model: Model) -> Element(Message) {
     case model {
       Start -> view_start()
       CardManager(cards) -> view_card_management(cards)
-      CardModifying(card_id) -> view_not_implemented("card creation")
-      CardDeleting(card_id) -> view_not_implemented("card creation")
-      CardCreation -> view_not_implemented("card creation")
-      DeckManager(deck) -> view_not_implemented("card creation")
-      DeckModifying(deck, cards) -> view_not_implemented("card creation")
-      DeckDeleting(deck_id, deck_title) -> view_not_implemented("card creation")
-      DeckCreation -> view_not_implemented("card creation")
-      //view_create_card()
-      //view_modify_card(id)
-      //view_delete_card(id)
-      //view_create_deck()
-      //view_modify_deck(id)
-      //view_deck_management()
-      //view_delete_deck(id)
+      CardModifying(_, _, question, answer, score) ->
+        view_card_modifying(question, answer, score)
+      CardDeleting(cards, card_id) -> view_card_deleting(cards, card_id)
+      CardCreation(_, question, answer, score) ->
+        view_card_creation(question, answer, score)
+      DeckManager(decks) -> view_deck_management(decks)
+      DeckModifying(_, deck, cards) -> view_deck_modifying(deck, cards)
+      DeckDeleting(decks, deck_id) -> view_deck_deleting(decks, deck_id)
+      DeckCardAddition(_, _, _, _, _) -> view_error(500, "jumpscare")
+      DeckCardRemoval(_, deck, cards, card_id) ->
+        view_deck_card_removal(deck, cards, card_id)
+      NewDeckCardChoose(_, deck, _, not_in_cards) ->
+        view_new_deck_card_choose(deck, not_in_cards)
+      DeckCreation(_, title) -> view_deck_creation(title)
+      ConfirmationPage(msg) -> view_confirmation(msg)
+
       Quiz -> view_not_implemented("quiz time")
       ErrorState(e, m) -> view_error(e, m)
     },
@@ -42,16 +51,20 @@ pub fn view(model: Model) -> Element(Message) {
 fn get_title(model: Model) -> String {
   case model {
     Start -> "FlashCard Manager"
-    CardCreation -> "Create Card"
-    CardModifying(_) -> "Modify Card"
+    CardCreation(_, _, _, _) -> "Create Card"
+    CardModifying(_, _, _, _, _) -> "Modify Card"
     CardManager(_) -> "Cards List"
-    CardDeleting(_) -> "Delete Card"
-    DeckCreation -> "Create Deck"
-    DeckModifying(_, _) -> "Deck"
+    CardDeleting(_, _) -> "Delete Card"
+    DeckCreation(_, _) -> "Create Deck"
+    DeckModifying(_, _m, _) -> "Deck"
     DeckManager(_) -> "Decks List"
     DeckDeleting(_, _) -> "Delete Deck"
     Quiz -> "Quiz Time"
     ErrorState(code, _) -> "Error " <> int.to_string(code)
+    DeckCardAddition(_, _, _, _, _) -> "Add a card to deck"
+    DeckCardRemoval(_, _, _, _) -> "Remove Card From Deck"
+    ConfirmationPage(_) -> "Confirm"
+    NewDeckCardChoose(_, _, _, _) -> "Choose a card for the deck"
   }
 }
 
@@ -81,6 +94,13 @@ fn view_start() -> Element(Message) {
           event.on_click(UserOpensDeckManagement),
         ],
         [html.text("Manage Decks")],
+      ),
+      html.button(
+        [
+          class("px-6 py-3 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600"),
+          event.on_click(model.UserTakesAQuiz(0, Some([]), Some(0), 0)),
+        ],
+        [html.text("Take a quiz")],
       ),
     ]),
   ])
@@ -124,73 +144,18 @@ fn view_error(code: Int, message: String) -> Element(Message) {
   ])
 }
 
-pub fn view_card_management(cards: List(Card)) -> Element(Message) {
-  html.div([class("p-8 flex flex-col gap-4")], [
-    html.div(
-      [class("flex flex-col gap-2")],
-      list.map(cards, fn(card) {
-        html.div(
-          [
-            class(
-              "flex items-center justify-between p-4 bg-white rounded-lg shadow",
-            ),
-          ],
-          [
-            html.div([class("flex flex-col gap-1")], [
-              html.p([class("font-sans font-medium")], [
-                html.text(card.question),
-              ]),
-              html.p([class("text-gray-500 text-sm")], [html.text(card.answer)]),
-              html.p([class("text-gray-400 text-xs")], [
-                html.text(
-                  "Score: "
-                  <> int.to_string(card.score)
-                  <> "  ✓ "
-                  <> int.to_string(card.times_correct)
-                  <> "  ✗ "
-                  <> int.to_string(card.times_wrong),
-                ),
-              ]),
-            ]),
-            html.div([class("flex gap-2")], [
-              html.button(
-                [
-                  class(
-                    "px-4 py-2 bg-cyan-500 text-white rounded hover:bg-cyan-600",
-                  ),
-                  event.on_click(UserModifiesACard(Some(card.id))),
-                ],
-                [html.text("Modify")],
-              ),
-              html.button(
-                [
-                  class(
-                    "px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600",
-                  ),
-                  event.on_click(UserDeletesACard(Some(card.id))),
-                ],
-                [html.text("Delete")],
-              ),
-            ]),
-          ],
-        )
-      }),
-    ),
+pub fn view_confirmation(message: String) -> Element(Message) {
+  html.div([class("flex flex-col items-center justify-center mt-32 gap-4")], [
+    html.div([class("text-6xl")], [html.text("Yipee")]),
+    html.h2([class("text-2xl font-sans text-center")], [html.text(message)]),
     html.button(
       [
         class(
-          "mt-4 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600",
+          "mt-4 px-6 py-3 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600",
         ),
-        event.on_click(UserCreatesACard),
-      ],
-      [html.text("Create a card")],
-    ),
-    html.button(
-      [
-        class("px-6 py-3 bg-gray-300 rounded-lg hover:bg-gray-400"),
         event.on_click(UserGoesBack),
       ],
-      [html.text("Go home")],
+      [html.text("Go back")],
     ),
   ])
 }

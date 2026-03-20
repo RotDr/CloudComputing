@@ -3,10 +3,11 @@ import gleam/http
 import gleam/http/request
 import gleam/int
 import gleam/json
+import gleam/option.{type Option, None, Some}
 import lustre/effect.{type Effect}
 import lustre_http
 import model.{
-  type Message, DBConfirmed, DBGaveTheCard, DBGaveTheCards, DBGaveTheDeckCards,
+  type Message, DBConfirmed, DBGaveTheCard, DBGaveTheCards, DBGaveTheDeck,
   DBGaveTheDecks,
 }
 import objects.{Card, Deck}
@@ -63,13 +64,12 @@ pub fn create_card(
   answer: String,
   score: Int,
 ) -> Effect(Message) {
-  let body =
-    json.object([
-      #("question", json.string(question)),
-      #("answer", json.string(answer)),
-      #("score", json.int(score)),
-    ])
-    |> json.to_string
+  json.object([
+    #("question", json.string(question)),
+    #("answer", json.string(answer)),
+    #("score", json.int(score)),
+  ])
+  |> json.to_string
   lustre_http.post(
     "http://localhost:5000/cards",
     json.object([
@@ -83,16 +83,71 @@ pub fn create_card(
 
 pub fn modify_card(
   card_id: Int,
-  question: String,
-  answer: String,
-  score: Int,
+  question: Option(String),
+  answer: Option(String),
+  score: Option(Int),
 ) -> Effect(Message) {
   let body =
-    json.object([
-      #("question", json.string(question)),
-      #("answer", json.string(answer)),
-      #("score", json.int(score)),
-    ])
+    case question {
+      Some(q) -> {
+        case answer {
+          Some(a) -> {
+            case score {
+              Some(s) ->
+                json.object([
+                  #("question", json.string(q)),
+                  #("answer", json.string(a)),
+                  #("score", json.int(s)),
+                ])
+              None ->
+                json.object([
+                  #("question", json.string(q)),
+                  #("answer", json.string(a)),
+                ])
+            }
+          }
+          None -> {
+            case score {
+              Some(s) ->
+                json.object([
+                  #("question", json.string(q)),
+                  #("score", json.int(s)),
+                ])
+              None ->
+                json.object([
+                  #("question", json.string(q)),
+                ])
+            }
+          }
+        }
+      }
+      None -> {
+        case answer {
+          Some(a) -> {
+            case score {
+              Some(s) ->
+                json.object([
+                  #("answer", json.string(a)),
+                  #("score", json.int(s)),
+                ])
+              None ->
+                json.object([
+                  #("answer", json.string(a)),
+                ])
+            }
+          }
+          None -> {
+            case score {
+              Some(s) ->
+                json.object([
+                  #("score", json.int(s)),
+                ])
+              None -> json.object([])
+            }
+          }
+        }
+      }
+    }
     |> json.to_string
   send_json(
     http.Put,
@@ -131,13 +186,21 @@ pub fn get_decks() -> Effect(Message) {
 }
 
 pub fn get_deck(deck_id: Int) -> Effect(Message) {
-  let card_id_decoder = {
-    use card_id <- decode.field("card_id", decode.int)
-    decode.success(card_id)
+  let decoder = {
+    use deck <- decode.field("deck", deck_decoder())
+    use cards <- decode.field("cards", decode.list(card_decoder()))
+    decode.success(#(deck, cards))
   }
   lustre_http.get(
     "http://localhost:5000/decks/" <> int.to_string(deck_id),
-    lustre_http.expect_json(decode.list(card_id_decoder), DBGaveTheDeckCards),
+    lustre_http.expect_json(decoder, DBGaveTheDeck),
+  )
+}
+
+pub fn get_cards_not_from_deck(deck_id: Int) -> Effect(Message) {
+  lustre_http.get(
+    "http://localhost:5000/decks/" <> int.to_string(deck_id) <> "/add",
+    lustre_http.expect_json(decode.list(card_decoder()), DBGaveTheCards),
   )
 }
 
@@ -162,7 +225,7 @@ pub fn add_card_to_deck(deck_id: Int, card_id: Int) -> Effect(Message) {
   lustre_http.post(
     "http://localhost:5000/decks/"
       <> int.to_string(deck_id)
-      <> "/"
+      <> "/add/"
       <> int.to_string(card_id),
     json.object([]),
     lustre_http.expect_json(message_decoder(), DBConfirmed),

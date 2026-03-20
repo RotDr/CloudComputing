@@ -4,13 +4,44 @@ import objects.{type Card, type Deck}
 
 pub type Model {
   CardManager(cards: List(Card))
-  CardModifying(card_id: Int)
-  CardDeleting(card_id: Int)
-  CardCreation
-  DeckManager(deck: List(Deck))
-  DeckModifying(deck: Deck, cards: List(Card))
-  DeckDeleting(deck_id: Int, deck_title: String)
-  DeckCreation
+  CardModifying(
+    cards: List(Card),
+    card_id: Int,
+    question: Option(String),
+    answer: Option(String),
+    score: Option(Int),
+  )
+  CardDeleting(cards: List(Card), card_id: Int)
+  CardCreation(
+    cards: List(Card),
+    question: String,
+    answer: String,
+    score: Option(Int),
+  )
+  DeckManager(decks: List(Deck))
+  DeckModifying(decks: List(Deck), deck: Deck, cards: List(Card))
+  DeckCardRemoval(
+    decks: List(Deck),
+    deck: Deck,
+    cards: List(Card),
+    card_id: Int,
+  )
+  NewDeckCardChoose(
+    decks: List(Deck),
+    deck: Deck,
+    cards: List(Card),
+    not_in_cards: List(Card),
+  )
+  DeckCardAddition(
+    decks: List(Deck),
+    deck: Deck,
+    cards: List(Card),
+    not_in_cards: List(Card),
+    card_id: Int,
+  )
+  DeckDeleting(decks: List(Deck), deck_id: Int)
+  DeckCreation(decks: List(Deck), title: String)
+  ConfirmationPage(message: String)
   Start
   Quiz
   ErrorState(code: Int, err_msg: String)
@@ -19,16 +50,15 @@ pub type Model {
 pub type Message {
   UserOpensCardManagement
   UserCreatesACard
-  UserModifiesACard(card_id: Option(Int))
-  UserDeletesACard(card_id: Option(Int))
+  UserModifiesACard(card_id: Int)
+  UserDeletesACard(card_id: Int)
   UserConfirmsAction
-  UserPutsDeckInfo(title: Option(String))
   UserGoesBack
   UserOpensDeckManagement
   UserCreatesADeck
-  UserModifiesADeck(deck_id: Option(Int))
-  UserDeletesADeck(deck_id: Option(Int))
-  UserAddsACardToDeck(deck_id: Option(Int), card_id: Option(Int))
+  UserModifiesADeck(deck: Deck, cards: List(Card))
+  UserDeletesADeck(deck_id: Int)
+  UserAddsACardToDeck(card_id: Int)
   UserTakesAQuiz(
     deck_id: Int,
     card_list: Option(List(Int)),
@@ -41,5 +71,13 @@ pub type Message {
   DBGaveTheDeck(Result(#(Deck, List(Card)), lustre_http.HttpError))
   AppError(code: Int, err: String)
   DBConfirmed(Result(String, lustre_http.HttpError))
-  DBGaveTheDeckCards(Result(List(Int), lustre_http.HttpError))
+  UserTypesCard(question: String, answer: String, score: Option(Int))
+  UserTypesDeck(title: String)
+  UserModifiesCard(
+    question: Option(String),
+    answer: Option(String),
+    score: Option(Int),
+  )
+  UserWantsToAddACardToDeck
+  UserWantsToRemoveACardFromDeck(card_id: Int)
 }
